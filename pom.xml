@@ -58,6 +58,7 @@
     <module>quartz-plugins</module>
     <module>terracotta</module>
     <module>quartz</module>
+    <module>quartz-simon</module>
   </modules>
 
   <properties>

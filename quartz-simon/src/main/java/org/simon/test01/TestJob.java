@@ -20,7 +20,6 @@ public class TestJob implements Job {
     String returnstr = DateFormat.format(d);
 
     public void execute(JobExecutionContext arg0) throws JobExecutionException {
-        // TODO Auto-generated method stub
         System.out.println(returnstr+"★★★★★★★★★★★");
     }
 

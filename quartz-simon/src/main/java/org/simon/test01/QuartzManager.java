@@ -1,14 +1,18 @@
 package org.simon.test01;
 
 import java.text.ParseException;
+
+import org.quartz.CronScheduleBuilder;
 import org.quartz.CronTrigger;
 import org.quartz.Job;
 import org.quartz.JobBuilder;
+import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SchedulerFactory;
 import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
 import org.quartz.impl.JobDetailImpl;
 import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.impl.triggers.CronTriggerImpl;
@@ -30,22 +34,23 @@ public class QuartzManager {
      *  添加一个定时任务，使用默认的任务组名，触发器名，触发器组名
      * @param jobName 任务名
      * @param job     任务
-     * @param time    时间设置，参考quartz说明文档
      * @throws SchedulerException
      * @throws ParseException
      */
-    public static void addJob(String jobName,Job job,String time)
+    public static void addJob(String jobName, Job job, String cron, JobDataMap param)
             throws SchedulerException, ParseException{
         Scheduler sched = sf.getScheduler();
 
+        JobBuilder builder = JobBuilder.newJob(job.getClass())
+                .withIdentity(jobName, Scheduler.DEFAULT_GROUP);
+        if (param != null) {
+            builder.usingJobData(param);
+        }
 
-        JobDetail jobDetail = new JobDetailImpl(jobName, JOB_GROUP_NAME, job.getClass());//任务名，任务组，任务执行类
-        //触发器
-        CronTrigger  trigger =
-                new CronTriggerImpl(jobName, TRIGGER_GROUP_NAME, time);//触发器名,触发器组
-        sched.scheduleJob(jobDetail,trigger);
-        //启动
-        if(!sched.isShutdown())
+        Trigger trigger = TriggerBuilder.newTrigger().withIdentity(jobName, TRIGGER_GROUP_NAME)
+                .withSchedule(CronScheduleBuilder.cronSchedule(cron)).build();
+        sched.scheduleJob(builder.build(), trigger);
+        if (!sched.isShutdown())
             sched.start();
     }
 
