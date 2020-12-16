@@ -244,10 +244,15 @@ public class QuartzSchedulerThread extends Thread {
     public void run() {
         int acquiresFailed = 0;
 
+        //判断是否应该结束调度
         while (!halted.get()) {
             try {
                 // check if we're supposed to pause...
                 synchronized (sigLock) {
+                    /**
+                     * 判断是否应该暂停调度，如果暂停则不断在循环中阻塞
+                     * 如暂停状态被外部环境修改，则线程会被立即唤醒并退出循环
+                     */
                     while (paused && !halted.get()) {
                         try {
                             // wait until togglePause(false) is called...
@@ -267,6 +272,9 @@ public class QuartzSchedulerThread extends Thread {
 
                 // wait a bit, if reading from job store is consistently
                 // failing (e.g. DB is down or restarting)..
+                /**
+                 *  在前几次的循环中如果触发器的读取出现问题，则可能是数据库重启一类的原因引发的故障
+                 */
                 if (acquiresFailed > 1) {
                     try {
                         long delay = computeDelayForRepeatedErrors(qsRsrcs.getJobStore(), acquiresFailed);
@@ -275,9 +283,16 @@ public class QuartzSchedulerThread extends Thread {
                     }
                 }
 
+                /**
+                 * 获取线程池中可用线程数，无可用该方法会阻塞
+                 */
                 int availThreadCount = qsRsrcs.getThreadPool().blockForAvailableThreads();
+                /**
+                 * 查询可用于执行任务(job)的工作线程数量，若线程池中暂无可用线程则blockForAvailableThreads方法将会阻塞
+                 */
                 if(availThreadCount > 0) { // will always be true, due to semantics of blockForAvailableThreads...
 
+                    //这个if分支查询到可用的工作线程，从JobStore中获取一批即将执行的触发器,这里的JobStore存储介质可以是数据库、也可以是内存
                     List<OperableTrigger> triggers;
 
                     long now = System.currentTimeMillis();
@@ -286,6 +301,31 @@ public class QuartzSchedulerThread extends Thread {
                     try {
                         triggers = qsRsrcs.getJobStore().acquireNextTriggers(
                                 now + idleWaitTime, Math.min(availThreadCount, qsRsrcs.getMaxBatchSize()), qsRsrcs.getBatchTimeWindow());
+                        /**
+                         * acquireNextTriggers方法获取一批即将执行的触发器
+                         *  1、参数idleWaitTime默认为30s,即当前时间后30s内即将被触发执行的触发器就会被取出
+                         *  2、此外在acquireNextTriggers方法内部还有一个参数misfireThreshold，misfireThreshold是一个时间范围，
+                         *      用于判定触发器是否延时触发，misfireThreshold默认值是60秒，它相对的实际意义就是:在当前时间的60秒之前本应执行但尚未执行的触发器不被认为是延迟触发,
+                         *      这些触发器同样会被acquireNextTriggers发现，有时由于工程线程繁忙、程序重启等原因，原本预定要触发的任务可能延迟，我们可以在每个触发器中可以设置MISFIRE_INSTRUCTION,用于指定延迟触发后使用的策略
+                         *      举例，对于CronTrigger,延迟处理的策略主要有3种：
+                         *          （1）一个触发器无论延迟多少次，这些延迟都会被程序尽可能补回来
+                         *          （2）检测到触发器延迟后，该触发器会在尽可能短的时间内被立即执行一次(只有一次)，然后恢复正常
+                         *          （3）检测到延迟后不采取任何动作，触发器以现在时间为基准，根据自身的安排等待下一次被执行或停止，
+                         *              比如有些触发器只执行一次，一旦延迟后，该触发器也不会被触发
+                         *
+                         *
+                         *      关于触发器是否延迟的判定由一个叫MisfireHandler的线程独立负责，它会判定并影响延迟触发器的下一次触发，但不会真正进行触发的动作，
+                         *      触发的工作将统一交由QuartzSchedulerThread即本线程处理，如果判定一个触发器延迟，则根据策略修改触发器的下一次执行时间或直接停止触发器
+                         *      所以这些延迟触发器被MisfireHandler处理后若仍有下次执行机会，就同样会在其触发时间被发现并触发，要注意的是MisfireHandler只会处理延迟策略不为上述第(1)类的触发器
+                         *      第(1)类触发器在延迟后，一旦获取到资源就可触发，这个过程不需被修改下次执行时间就可完成
+                         *
+                         *
+                         *  3、acquireNextTriggers方法最后一个参数batchTimeWindow，这个参数默认是0，同样是一个时间范围，acquireNextTriggers可以每次取出一批触发器，但默认情况下这批触发器只会有一个
+                         *     但是有时候我们对任务执行的时间要求不严格时，就可以让两个执行时间距离较近的触发器同时被取出执行
+                         *      举例，有两个触发器分别是10:00:00和10:00:05执行，此时如果将batchTimeWindow调整为大于等于5000毫秒，maxBatchSize数量大于等于2，
+                         *      且拥有足够的线程时,这两个触发器就有可能会在预定时间10:00:00被同时执行
+                         *
+                         */
                         acquiresFailed = 0;
                         if (log.isDebugEnabled())
                             log.debug("batch acquisition of " + (triggers == null ? 0 : triggers.size()) + " triggers");
@@ -313,6 +353,12 @@ public class QuartzSchedulerThread extends Thread {
                         now = System.currentTimeMillis();
                         long triggerTime = triggers.get(0).getNextFireTime().getTime();
                         long timeUntilTrigger = triggerTime - now;
+                        /**
+                         * 在该while循环体中，被取出的触发器会阻塞等待到预定时间被触发,这里用了阻塞，因为当外部环境对触发器做了调整或者新增时，会对线程进行唤醒
+                         * 在阻塞被唤醒后，会有相关的逻辑判断是否应该重新取出触发器来执行
+                         * 比如当前时间是10:00:00，在上述逻辑中已经取出了10:00:05需要执行的触发器
+                         * 此时如果新增了一个10:00:03的触发器，则可能需要丢弃10:00:05的，再取出10:00:03的
+                         */
                         while(timeUntilTrigger > 2) {
                             synchronized (sigLock) {
                                 if (halted.get()) {
@@ -348,6 +394,12 @@ public class QuartzSchedulerThread extends Thread {
                         synchronized(sigLock) {
                             goAhead = !halted.get();
                         }
+                        /**
+                         * triggersFired方法主要有几个作用:
+                         * (1)取出触发器对应应执行的任务
+                         * (2)记录触发器的执行，修改触发器的状态，如果对应的任务是StatefulJob，则阻塞其他触发器
+                         * (3)调整触发器下次执行的时间
+                         */
                         if(goAhead) {
                             try {
                                 List<TriggerFiredResult> res = qsRsrcs.getJobStore().triggersFired(triggers);
@@ -368,6 +420,7 @@ public class QuartzSchedulerThread extends Thread {
                         }
 
                         for (int i = 0; i < bndles.size(); i++) {
+                            //这个循环就是将当前取出的触发器挨个执行，并触发相应的监听器
                             TriggerFiredResult result =  bndles.get(i);
                             TriggerFiredBundle bndle =  result.getTriggerFiredBundle();
                             Exception exception = result.getException();
@@ -388,6 +441,7 @@ public class QuartzSchedulerThread extends Thread {
 
                             JobRunShell shell = null;
                             try {
+                                //从线程池中取出线程执行任务
                                 shell = qsRsrcs.getJobRunShellFactory().createJobRunShell(bndle);
                                 shell.initialize(qs);
                             } catch (SchedulerException se) {
@@ -405,7 +459,7 @@ public class QuartzSchedulerThread extends Thread {
                             }
 
                         }
-
+                        //执行完后重新再取下一批触发器
                         continue; // while (!halted)
                     }
                 } else { // if(availThreadCount > 0)
@@ -413,6 +467,7 @@ public class QuartzSchedulerThread extends Thread {
                     continue; // while (!halted)
                 }
 
+                //若本次循环未取出触发器，则阻塞一段时间(随机时间)，然后再重试
                 long now = System.currentTimeMillis();
                 long waitTime = now + getRandomizedIdleWaitTime();
                 long timeUntilContinue = waitTime - now;

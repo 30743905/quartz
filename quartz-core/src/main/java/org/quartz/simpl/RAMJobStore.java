@@ -86,18 +86,21 @@ public class RAMJobStore implements JobStore {
      * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
      */
 
+    //job存储
     protected HashMap<JobKey, JobWrapper> jobsByKey = new HashMap<JobKey, JobWrapper>(1000);
-
+    //trigger存储
     protected HashMap<TriggerKey, TriggerWrapper> triggersByKey = new HashMap<TriggerKey, TriggerWrapper>(1000);
-
+    //job存储 按照group分组
     protected HashMap<String, HashMap<JobKey, JobWrapper>> jobsByGroup = new HashMap<String, HashMap<JobKey, JobWrapper>>(25);
-
+    //trigger存储 按照group分组
     protected HashMap<String, HashMap<TriggerKey, TriggerWrapper>> triggersByGroup = new HashMap<String, HashMap<TriggerKey, TriggerWrapper>>(25);
-
+    /**
+     * trigger存储 排序，排序规则具体参见 {@link Trigger.TriggerTimeComparator}
+     */
     protected TreeSet<TriggerWrapper> timeTriggers = new TreeSet<TriggerWrapper>(new TriggerWrapperComparator());
 
     protected HashMap<String, Calendar> calendarsByName = new HashMap<String, Calendar>(25);
-
+    //jobkey分组存储trigger
     protected Map<JobKey, List<TriggerWrapper>> triggersByJob = new HashMap<JobKey, List<TriggerWrapper>>(1000);
 
     protected final Object lock = new Object();
@@ -107,7 +110,7 @@ public class RAMJobStore implements JobStore {
     protected HashSet<String> pausedJobGroups = new HashSet<String>();
 
     protected HashSet<JobKey> blockedJobs = new HashSet<JobKey>();
-    
+    //trigger超时容忍阈值 单位：毫秒
     protected long misfireThreshold = 5000l;
 
     protected SchedulerSignaler signaler;

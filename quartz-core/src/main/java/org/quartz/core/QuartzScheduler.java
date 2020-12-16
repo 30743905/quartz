@@ -845,6 +845,7 @@ public class QuartzScheduler implements RemotableQuartzScheduler {
         if (trigger.getCalendarName() != null) {
             cal = resources.getJobStore().retrieveCalendar(trigger.getCalendarName());
         }
+        //计算trigger第一次触发时间
         Date ft = trig.computeFirstFireTime(cal);
 
         if (ft == null) {

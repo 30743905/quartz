@@ -1,6 +1,8 @@
 package org.simon.test01;
 
 import java.text.ParseException;
+import java.util.Date;
+import java.util.List;
 
 import org.quartz.CronScheduleBuilder;
 import org.quartz.CronTrigger;
@@ -8,14 +10,19 @@ import org.quartz.Job;
 import org.quartz.JobBuilder;
 import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SchedulerFactory;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
+import org.quartz.TriggerKey;
 import org.quartz.impl.JobDetailImpl;
 import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.impl.triggers.CronTriggerImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  * 你搞忘写注释了
@@ -25,128 +32,106 @@ import org.quartz.impl.triggers.CronTriggerImpl;
  * @since 1.0.0
  */
 public class QuartzManager {
+
+    private static Logger log = LoggerFactory.getLogger(QuartzManager.class);
+
+    //1.创建schedulerFactory的工厂
     private static SchedulerFactory sf = new StdSchedulerFactory();
     private static String JOB_GROUP_NAME = "group1";
     private static String TRIGGER_GROUP_NAME = "trigger1";
 
 
-    /** *//**
+    /**
      *  添加一个定时任务，使用默认的任务组名，触发器名，触发器组名
      * @param jobName 任务名
-     * @param job     任务
+     * @param jobClass     任务
      * @throws SchedulerException
      * @throws ParseException
      */
-    public static void addJob(String jobName, Job job, String cron, JobDataMap param)
+    public static void addJob(String jobName, Class jobClass, String cron, JobDataMap param)
             throws SchedulerException, ParseException{
+        //2.从工厂中获取调度器实例
         Scheduler sched = sf.getScheduler();
 
-        JobBuilder builder = JobBuilder.newJob(job.getClass())
-                .withIdentity(jobName, Scheduler.DEFAULT_GROUP);
+        //创建JobDetail
+        JobBuilder builder = JobBuilder.newJob(jobClass)
+                .withDescription("this is a test job")
+                .withIdentity(jobName, Scheduler.DEFAULT_GROUP)
+                .storeDurably(true);
         if (param != null) {
             builder.usingJobData(param);
         }
 
-        Trigger trigger = TriggerBuilder.newTrigger().withIdentity(jobName, TRIGGER_GROUP_NAME)
-                .withSchedule(CronScheduleBuilder.cronSchedule(cron)).build();
-        sched.scheduleJob(builder.build(), trigger);
-        if (!sched.isShutdown())
+        //任务运行的时间，simpleSchedle类型触发器有效
+        long time = System.currentTimeMillis() + 3 * 1000L;
+        Date startTime = new Date(time);
+
+        //创建Trigger
+        //使用SimpleScheduleBuilder或者CronSchedulerBuilder
+        Trigger trigger = TriggerBuilder.newTrigger()
+                .withDescription("触发器")
+                .withIdentity(jobName+"-trigger", TRIGGER_GROUP_NAME)
+                //.startAt(startTime)
+                .withSchedule(CronScheduleBuilder.cronSchedule(cron))
+                .build();
+
+        //注册任务和定时器
+        Date firstFireTime = sched.scheduleJob(builder.build(), trigger);
+        log.info("第一次触发时间:{}", firstFireTime);
+        if (!sched.isShutdown()){
+            //启动调度器
+            log.info("启动时间：{}", new Date());
             sched.start();
+
+        }
+
     }
 
-    /** *//**
-     * 添加一个定时任务
-     * @param jobName 任务名
-     * @param jobGroupName 任务组名
-     * @param triggerName  触发器名
-     * @param triggerGroupName 触发器组名
-     * @param job     任务
-     * @param time    时间设置，参考quartz说明文档
-     * @throws SchedulerException
-     * @throws ParseException
-     */
-    /*public static void addJob(String jobName,String jobGroupName,
-                              String triggerName,String triggerGroupName,
-                              Job job,String time)
-            throws SchedulerException, ParseException{
-        Scheduler sched = sf.getScheduler();
-        JobDetail jobDetail = new JobDetail(jobName, jobGroupName, job.getClass());//任务名，任务组，任务执行类
-        //触发器
-        CronTrigger  trigger =
-                new CronTrigger(triggerName, triggerGroupName);//触发器名,触发器组
-        trigger.setCronExpression(time);//触发器时间设定
-        sched.scheduleJob(jobDetail,trigger);
-        if(!sched.isShutdown())
-            sched.start();
-    }*/
 
     /** *//**
      * 修改一个任务的触发时间(使用默认的任务组名，触发器名，触发器组名)
      * @param jobName
-     * @param time
      * @throws SchedulerException
      * @throws ParseException
      */
-    /*public static void modifyJobTime(String jobName,String time)
+    public static void modifyJobTime(String jobName, String cronExpression)
             throws SchedulerException, ParseException{
         Scheduler sched = sf.getScheduler();
-        Trigger trigger =  sched.getTrigger(jobName,TRIGGER_GROUP_NAME);
-        if(trigger != null){
-            CronTrigger  ct = (CronTrigger)trigger;
-            ct.setCronExpression(time);
-            sched.resumeTrigger(jobName,TRIGGER_GROUP_NAME);
+        List<? extends Trigger> triggers = sched.getTriggersOfJob(JobKey.jobKey(jobName, Scheduler.DEFAULT_GROUP));
+        System.out.println(triggers);
+        for(Trigger trigger:triggers){
+            CronTriggerImpl  ct = (CronTriggerImpl)trigger;
+            ct.setCronExpression(cronExpression);
+            sched.rescheduleJob(ct.getKey(), ct);
         }
-    }*/
+    }
 
-    /** *//**
-     * 修改一个任务的触发时间
-     * @param triggerName
-     * @param triggerGroupName
-     * @param time
-     * @throws SchedulerException
-     * @throws ParseException
-     */
-    /*public static void modifyJobTime(String triggerName,String triggerGroupName,
-                                     String time)
+    public static void modifyJob(String jobName, Class jobClass)
             throws SchedulerException, ParseException{
         Scheduler sched = sf.getScheduler();
-        Trigger trigger =  sched.getTrigger(triggerName,triggerGroupName);
-        if(trigger != null){
-            CronTrigger  ct = (CronTrigger)trigger;
-            //修改时间
-            ct.setCronExpression(time);
-            //重启触发器
-            sched.resumeTrigger(triggerName,triggerGroupName);
-        }
-    }*/
+
+        JobBuilder builder = JobBuilder.newJob(jobClass)
+                    .withDescription("this is a test job")
+                    .withIdentity(jobName, Scheduler.DEFAULT_GROUP)
+                .storeDurably();
+        sched.addJob(builder.build(), true);
+    }
 
     /** *//**
      * 移除一个任务(使用默认的任务组名，触发器名，触发器组名)
      * @param jobName
      * @throws SchedulerException
      */
-    /*public static void removeJob(String jobName)
+    public static void removeJob(String jobName)
             throws SchedulerException{
         Scheduler sched = sf.getScheduler();
-        sched.pauseTrigger(jobName,TRIGGER_GROUP_NAME);//停止触发器
-        sched.unscheduleJob(jobName,TRIGGER_GROUP_NAME);//移除触发器
-        sched.deleteJob(jobName,JOB_GROUP_NAME);//删除任务
-    }*/
 
-    /** *//**
-     * 移除一个任务
-     * @param jobName
-     * @param jobGroupName
-     * @param triggerName
-     * @param triggerGroupName
-     * @throws SchedulerException
-     */
-    /*public static void removeJob(String jobName,String jobGroupName,
-                                 String triggerName,String triggerGroupName)
-            throws SchedulerException{
-        Scheduler sched = sf.getScheduler();
-        sched.pauseTrigger(triggerName,triggerGroupName);//停止触发器
-        sched.unscheduleJob(triggerName,triggerGroupName);//移除触发器
-        sched.deleteJob(jobName,jobGroupName);//删除任务
-    }*/
+        List<? extends Trigger> triggers = sched.getTriggersOfJob(JobKey.jobKey(jobName, Scheduler.DEFAULT_GROUP));
+        for(Trigger trigger:triggers){
+            sched.pauseTrigger(trigger.getKey());//停止触发器
+            sched.unscheduleJob(trigger.getKey());//移除触发器
+        }
+        sched.deleteJob(JobKey.jobKey(jobName, Scheduler.DEFAULT_GROUP));//删除任务
+    }
+
 }
