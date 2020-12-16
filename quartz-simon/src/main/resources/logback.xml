@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration  debug="false" scan="true" scanPeriod="10 seconds">
+
+    <property name="logDir" value="./logs/"/>
+    <property name="logPattern" value="[%d{yyyy-MM-dd HH:mm:ss.SSS}][%p][%t][%C{0}:%M:%L] %m%n"/>
+
+
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${logPattern}</pattern>
+        </encoder>
+    </appender>
+
+
+    <appender name="detailAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <File>${logDir}/detailLog.log</File>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <FileNamePattern>${logDir}/temp/detail-log.%d{yyyy-MM-dd}.%i.log.gz</FileNamePattern>
+            <maxHistory>10</maxHistory>
+            <maxFileSize>300MB</maxFileSize>
+            <totalSizeCap>20GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <Pattern>${logPattern}</Pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+
+    <appender name="errorAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <File>${logDir}/errorLog.log</File>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <FileNamePattern>${logDir}/temp/error-log.%d{yyyy-MM-dd}.log</FileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <Pattern>${logPattern}</Pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+
+    <root level="INFO" additivity="false">
+        <appender-ref ref="console"/>
+        <appender-ref ref="detailAppender"/>
+        <appender-ref ref="errorAppender"/>
+    </root>
+
+</configuration>

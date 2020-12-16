@@ -1,7 +1,10 @@
 package org.simon.test01;
 
+import org.junit.Test;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 你搞忘写注释了
@@ -17,22 +20,38 @@ public class Demo01 {
         Date d = new Date();
         String returnstr = DateFormat.format(d);
 
-        TestJob job = new TestJob();
         try {
             System.out.println(returnstr+ "【系统启动】");
-            QuartzManager.addJob("job01", job,"0/2 * * * * ?", null); //每2秒钟执行一次
+            QuartzManager.addJob("job01", TestJob1.class,"0/2 * * * * ?", null); //每2秒钟执行一次
+            //QuartzManager.addJob("job02", TestJob2.class,"0/5 * * * * ?", null); //每2秒钟执行一次
 
-//            Thread.sleep(10000);
-//            System.out.println("【修改时间】");
-//            QuartzManager.modifyJobTime(job_name,"0/10 * * * * ?");
-//            Thread.sleep(20000);
-//            System.out.println("【移除定时】");
+            Thread.sleep(10000);
+            System.out.println("【修改时间】");
+            QuartzManager.modifyJobTime("job01", "0/5 * * * * ?");
+            //QuartzManager.modifyJob("job01", TestJob2.class);
+            Thread.sleep(20000);
+            System.out.println("【移除定时】");
 //            QuartzManager.removeJob(job_name);
 //            Thread.sleep(10000);
 //
 //            System.out.println("/n【添加定时任务】");
 //            QuartzManager.addJob(job_name,job,"0/5 * * * * ?");
 
+        }  catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void test01() {
+        SimpleDateFormat DateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
+        Date d = new Date();
+        String returnstr = DateFormat.format(d);
+
+        try {
+            System.out.println("启动时间："+new Date());
+            QuartzManager.addJob("job01", TestJob1.class,"5/40 * * * * ?", null); //每2秒钟执行一次
+            TimeUnit.SECONDS.sleep(1000);
         }  catch (Exception e) {
             e.printStackTrace();
         }

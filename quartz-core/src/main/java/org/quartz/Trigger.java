@@ -57,7 +57,16 @@ import java.util.Date;
 public interface Trigger extends Serializable, Cloneable, Comparable<Trigger> {
 
     public static final long serialVersionUID = -3904243490805975570L;
-    
+
+    /**
+     * 触发器状态：
+     *  NONE:无
+     *  NORMAL：正常状态
+     *  PAUSED：暂停状态
+     *  COMPLETE：完成
+     *  ERROR：错误
+     *  BLOCKED：阻塞
+     */
     public enum TriggerState { NONE, NORMAL, PAUSED, COMPLETE, ERROR, BLOCKED }
     
     /**
@@ -86,6 +95,15 @@ public interface Trigger extends Serializable, Cloneable, Comparable<Trigger> {
      *
      * <p><code>SET_ALL_JOB_TRIGGERS_ERROR</code> Instructs the <code>{@link Scheduler}</code> that 
      * the <code>Trigger</code> should be put in the <code>ERROR</code> state.</p>
+     *
+     * 执行完成时状态：
+     *  NOOP：无
+     *  RE_EXECUTE_JOB：重复执行
+     *  SET_TRIGGER_COMPLETE：触发器执行完成
+     *  DELETE_TRIGGER：删除触发器
+     *  SET_ALL_JOB_TRIGGERS_COMPLETE：所有作业和触发器执行完成
+     *  SET_TRIGGER_ERROR：触发器执行错误
+     *  SET_ALL_JOB_TRIGGERS_ERROR：设置所有都是错误的
      */
     public enum CompletedExecutionInstruction { NOOP, RE_EXECUTE_JOB, SET_TRIGGER_COMPLETE, DELETE_TRIGGER, 
         SET_ALL_JOB_TRIGGERS_COMPLETE, SET_TRIGGER_ERROR, SET_ALL_JOB_TRIGGERS_ERROR }
