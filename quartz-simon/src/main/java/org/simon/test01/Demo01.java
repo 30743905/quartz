@@ -22,15 +22,17 @@ public class Demo01 {
 
         try {
             System.out.println(returnstr+ "【系统启动】");
-            QuartzManager.addJob("job01", TestJob1.class,"0/2 * * * * ?", null); //每2秒钟执行一次
+            QuartzManager.addJob("job01", TestJob1.class,"0/55 * * * * ?", null); //每2秒钟执行一次
+            //QuartzManager.addJob("job02", TestJob2.class,"0/48 * * * * ?", null); //每2秒钟执行一次
+            //QuartzManager.addJobWithMoreTriggers("job01", TestJob1.class,"0/50 * * * * ?", "0/55 * * * * ?", null); //每2秒钟执行一次
             //QuartzManager.addJob("job02", TestJob2.class,"0/5 * * * * ?", null); //每2秒钟执行一次
 
-            Thread.sleep(10000);
+            TimeUnit.SECONDS.sleep(10000);
             System.out.println("【修改时间】");
-            QuartzManager.modifyJobTime("job01", "0/5 * * * * ?");
+            //QuartzManager.modifyJobTime("job01", "0/5 * * * * ?");
             //QuartzManager.modifyJob("job01", TestJob2.class);
-            Thread.sleep(20000);
-            System.out.println("【移除定时】");
+            //Thread.sleep(20000);
+            //System.out.println("【移除定时】");
 //            QuartzManager.removeJob(job_name);
 //            Thread.sleep(10000);
 //
@@ -50,7 +52,7 @@ public class Demo01 {
 
         try {
             System.out.println("启动时间："+new Date());
-            QuartzManager.addJob("job01", TestJob1.class,"5/40 * * * * ?", null); //每2秒钟执行一次
+            QuartzManager.addJob("job01", TestJob1.class,"0/5 * * * * ?", null); //每2秒钟执行一次
             TimeUnit.SECONDS.sleep(1000);
         }  catch (Exception e) {
             e.printStackTrace();

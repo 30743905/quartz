@@ -1398,6 +1398,14 @@ public class RAMJobStore implements JobStore {
         }
     }
 
+    /**
+     * 将当前时间减去misfireThreshold得到misfireTime，如果定时任务时间大于misfireTime，那么可以认为并没有错过该任务的触发时机，那么return false继续正常的思路。
+     * 如果一旦小于，那么说明错过了，这时候会重新计算该任务的下一次触发时机，如果没有下次任务的触发时间，那么说明该任务不会被再触发，于是状态改成COMPLETED。
+     * 如果错过了时机，并计算出下次任务触发时间不为空，那么可以当做一个新的任务加入timeTriggers中，并重新下一轮循环。
+     *
+     * @param tw
+     * @return
+     */
     protected boolean applyMisfire(TriggerWrapper tw) {
 
         long misfireTime = System.currentTimeMillis();
@@ -1448,6 +1456,7 @@ public class RAMJobStore implements JobStore {
      * @see #releaseAcquiredTrigger(OperableTrigger)
      */
     public List<OperableTrigger> acquireNextTriggers(long noLaterThan, int maxCount, long timeWindow) {
+        log.info("maxCount:{}, timeWindow:{}", maxCount, timeWindow);
         synchronized (lock) {
             List<OperableTrigger> result = new ArrayList<OperableTrigger>();
             Set<JobKey> acquiredJobKeysForNoConcurrentExec = new HashSet<JobKey>();
@@ -1474,6 +1483,16 @@ public class RAMJobStore implements JobStore {
                     continue;
                 }
 
+                /**
+                 * 在得到最先触发的定时任务后，将其移出timeTriggers。得到最先触发的定时任务，在这里可能存在这样一个bug，
+                 * 定时任务的触发时间 在向Scheduler中配置时已经定下，但此时并未调用 Scheduler的start，如果在调用其start后，
+                 * 我们发现最先触发的定时任务的触发时间已经过了，言外之意，调用Scheduler的start时，最先触发的定时任务已经过期。
+                 * applyMisFire()在这里确认了这个问题。
+                 *
+                 * applyMisfire返回false则认为任务没有过期，正常逻辑继续向下处理，
+                 * 如果过期，则applyMisfire会根据过期机制重新计算触发时机，返回true，重新加入到timeTriggers当成新任务重新触发
+                 *
+                 */
                 if (applyMisfire(tw)) {
                     if (tw.trigger.getNextFireTime() != null) {
                         timeTriggers.add(tw);
@@ -1481,7 +1500,11 @@ public class RAMJobStore implements JobStore {
                     continue;
                 }
 
+                /**
+                 * 如果此时得到的任务的等待时间大于设置的等待时间，那么退出循环(因为当前的任务的触发时间是最小的，之后触发时间之后大于设置的等待时间)。
+                 */
                 if (tw.getTrigger().getNextFireTime().getTime() > batchEnd) {
+                    log.info("任务的等待时间大于设置的等待时间，那么退出循环");
                     timeTriggers.add(tw);
                     break;
                 }
@@ -1490,6 +1513,20 @@ public class RAMJobStore implements JobStore {
                 // put it back into the timeTriggers set and continue to search for next trigger.
                 JobKey jobKey = tw.trigger.getJobKey();
                 JobDetail job = jobsByKey.get(tw.trigger.getJobKey()).jobDetail;
+                /**
+                 * job.isConcurrentExectionDisallowed()无非看该job是否是@DisallowConcurrentExecution注解的实例，
+                 * 如果是进入条件分支。第一次进入把jobkey加入到acquiredJobKeysForNoConcurrentExec集合中，第二次计算后又选取到该job，
+                 * 此时acquiredJobKeysForNoConcurrentExec中已经包含该job的jobkey，于是把该jobkey放入excludedTriggers集合中，并重新选取新的任务，
+                 * 而excludedTriggers集合将会在最后把其中的任务重新放入TimeTriggers中。需要注意的是acquiredJobKeysForNoConcurrentExec跟excludedTriggers集合是局部变量，
+                 * 而TimeTriggers是成员，全局的
+                 *
+                 * @DisallowConcurrentExecution:禁止并发执行多个相同定义的JobDetail, 这个注解是加在Job类上的, 但意思并不是不能同时执行多个Job,而是不能并发执行同一个Job Definition(由JobDetail定义),
+                 * 但是可以同时执行多个不同的JobDetail。举例说明,我们有一个Job类,叫做SayHelloJob, 并在这个Job上加了这个注解, 然后在这个Job上定义了很多个JobDetail,
+                 * 如sayHelloToJoeJobDetail, sayHelloToMikeJobDetail, 那么当scheduler启动时, 不会并发执行多个sayHelloToJoeJobDetail或者sayHelloToMikeJobDetail,
+                 * 但可以同时执行sayHelloToJoeJobDetail跟sayHelloToMikeJobDetail
+                 *
+                 *
+                 */
                 if (job.isConcurrentExectionDisallowed()) {
                     if (acquiredJobKeysForNoConcurrentExec.contains(jobKey)) {
                         excludedTriggers.add(tw);
@@ -1499,11 +1536,26 @@ public class RAMJobStore implements JobStore {
                     }
                 }
 
+                /**
+                 * 之后将取得的任务状态改成ACQUIRED表示该任务是准备触发的，并记录任务的下一次要触发的时间，然后将任务深克隆，加入到要返回的result数组中。
+                 * 然后不断取任务执行上面流程，直到取到任务数目最大值，或者直到没有在等待时长内的任务，acquireNextTriggers返回的Trigger数组就是接下来准备触发的任务。
+                 *
+                 * 其实此时并不能保证这些已经是最后要触发的任务。如果在上面这段时间内有新的定时任务加进来，并且它的执行时间早于所有刚刚取得的任务的触发时间，或者早于部分刚取得的任务的触发时间，这样都会有问题。
+                 *
+                 * 要提一下，每一个定时任务加进来都会更新管理线程的signaledNextFireTime，我们看下其逻辑
+                 */
                 tw.state = TriggerWrapper.STATE_ACQUIRED;
                 tw.trigger.setFireInstanceId(getFiredTriggerRecordId());
                 OperableTrigger trig = (OperableTrigger) tw.trigger.clone();
                 if (result.isEmpty()) {
+                    log.info("------before:{}", new Date(batchEnd));
+                    /**
+                     * 比如trigger1:10.10.30触发，trigger2:10.10.35触发
+                     * 这里提取到第一个最早触发得到trigger1，batchEnd会被修改成trigger1的触发时间，后面提取出的trigger触发时间要小于等于trigger1才行
+                     * 这里还通过另一个参数timeWindow控制，可以提取比trigger1触发时间晚时间范围，默认0
+                     */
                     batchEnd = Math.max(tw.trigger.getNextFireTime().getTime(), System.currentTimeMillis()) + timeWindow;
+                    log.info("------after:{}, nextFireTime:{}", new Date(batchEnd), tw.trigger.getNextFireTime());
                 }
                 result.add(trig);
                 if (result.size() == maxCount)

@@ -17,6 +17,8 @@
 
 package org.quartz.impl.jdbcjobstore;
 
+import com.alibaba.fastjson.JSON;
+
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -1065,8 +1067,10 @@ public abstract class JobStoreSupport implements JobStore, Constants {
             new VoidTransactionCallback() {
                 public void executeVoid(Connection conn) throws JobPersistenceException {
                     storeJob(conn, newJob, false);
+                    log.info("-->插入qrtz_job_details:{}", JSON.toJSONString(newJob, true));
                     storeTrigger(conn, newTrigger, newJob, false,
                             Constants.STATE_WAITING, false, false);
+                    log.info("-->插入qrtz_triggers:{}", JSON.toJSONString(newTrigger, true));
                 }
             });
     }
@@ -2852,6 +2856,7 @@ public abstract class JobStoreSupport implements JobStore, Constants {
                 for(TriggerKey triggerKey: keys) {
                     // If our trigger is no longer available, try a new one.
                     OperableTrigger nextTrigger = retrieveTrigger(conn, triggerKey);
+                    log.info("-->检索出trigger:{}", JSON.toJSONString(nextTrigger, true));
                     if(nextTrigger == null) {
                         continue; // next trigger
                     }
@@ -2862,6 +2867,7 @@ public abstract class JobStoreSupport implements JobStore, Constants {
                     JobDetail job;
                     try {
                         job = retrieveJob(conn, jobKey);
+                        log.info("-->检索出job:{}", JSON.toJSONString(job, true));
                     } catch (JobPersistenceException jpe) {
                         try {
                             getLog().error("Error retrieving job, setting trigger state to ERROR.", jpe);
@@ -2898,12 +2904,15 @@ public abstract class JobStoreSupport implements JobStore, Constants {
                     }
                     // We now have a acquired trigger, let's add to return list.
                     // If our trigger was no longer in the expected state, try a new one.
+                    // 更新qrtz_triggers.run_state: WAITING -> ACQUIRED
                     int rowsUpdated = getDelegate().updateTriggerStateFromOtherState(conn, triggerKey, STATE_ACQUIRED, STATE_WAITING);
+                    log.info("-->更新trigger STATE_WAITING -> STATE_ACQUIRED");
                     if (rowsUpdated <= 0) {
                         continue; // next trigger
                     }
                     nextTrigger.setFireInstanceId(getFiredTriggerRecordId());
-                    getDelegate().insertFiredTrigger(conn, nextTrigger, STATE_ACQUIRED, null);
+                    getDelegate().insertFiredTrigger(conn, nextTrigger, STATE_ACQUIRED, null); //todo
+                    log.info("-->插入qrtz_fired_triggers【STATE_ACQUIRED】：{}", JSON.toJSONString(nextFireTime, true));
 
                     if(acquiredTriggers.isEmpty()) {
                         batchEnd = Math.max(nextFireTime.getTime(), System.currentTimeMillis()) + timeWindow;
@@ -2952,9 +2961,12 @@ public abstract class JobStoreSupport implements JobStore, Constants {
         try {
             getDelegate().updateTriggerStateFromOtherState(conn,
                     trigger.getKey(), STATE_WAITING, STATE_ACQUIRED);
+            log.info("-->更新triggers[{}]状态[STATE_ACQUIRED] -> [STATE_WAITING]", trigger.getKey());
             getDelegate().updateTriggerStateFromOtherState(conn,
                     trigger.getKey(), STATE_WAITING, STATE_BLOCKED);
+            log.info("-->更新triggers[{}]状态[STATE_BLOCKED] -> [STATE_WAITING]", trigger.getKey());
             getDelegate().deleteFiredTrigger(conn, trigger.getFireInstanceId());
+            log.info("-->删除fired_triggers[{}]", trigger.getFireInstanceId());
         } catch (SQLException e) {
             throw new JobPersistenceException(
                     "Couldn't release acquired trigger: " + e.getMessage(), e);
@@ -3058,6 +3070,7 @@ public abstract class JobStoreSupport implements JobStore, Constants {
 
         try {
             getDelegate().updateFiredTrigger(conn, trigger, STATE_EXECUTING, job);
+            log.info("-->更新fired_trigger [STATE_EXECUTING]");
         } catch (SQLException e) {
             throw new JobPersistenceException("Couldn't insert fired trigger: "
                     + e.getMessage(), e);

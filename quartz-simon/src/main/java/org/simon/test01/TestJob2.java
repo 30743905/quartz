@@ -28,4 +28,7 @@ public class TestJob2 implements Job {
         log.info("-----> name:{}, time:{}", name, returnstr);
     }
 
+    public static void main(String[] args) {
+    }
+
 }
