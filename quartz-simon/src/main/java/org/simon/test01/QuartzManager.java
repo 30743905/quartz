@@ -24,8 +24,9 @@ import org.quartz.impl.JobDetailImpl;
 import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.quartz.impl.triggers.CronTriggerImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * 你搞忘写注释了
@@ -34,8 +35,10 @@ import lombok.extern.slf4j.Slf4j;
  * @date 2020-12-11
  * @since 1.0.0
  */
-@Slf4j
 public class QuartzManager {
+
+    private static Logger log = LoggerFactory.getLogger(QuartzManager.class);
+
     //1.创建schedulerFactory的工厂
     private static SchedulerFactory sf = new StdSchedulerFactory();
     private static String JOB_GROUP_NAME = "group1";
