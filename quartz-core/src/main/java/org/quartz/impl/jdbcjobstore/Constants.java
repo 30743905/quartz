@@ -148,6 +148,15 @@ public interface Constants {
     String DEFAULT_TABLE_PREFIX = "QRTZ_";
 
     // STATES
+    /**
+     * WAITING:等待
+     * PAUSED:暂停
+     * ACQUIRED:已获取到放入到等待队列中
+     * STATE_EXECUTING：正在执行
+     * STATE_COMPLETE：完成
+     * BLOCKED：阻塞
+     * ERROR：错误
+     */
     String STATE_WAITING = "WAITING";
 
     String STATE_ACQUIRED = "ACQUIRED";
