@@ -44,7 +44,7 @@ public class CronTriggerImplTest {
 
         Date date = new Date();
         System.out.println("-->"+date);
-        //trigger.computeFirstFireTime(Calendar.getInstance());
+        trigger.computeFirstFireTime(null);
 
 
         for(int i=0;i<100;i++){
@@ -55,6 +55,37 @@ public class CronTriggerImplTest {
             System.out.println("getNextFireTime:"+trigger.getNextFireTime());
             TimeUnit.SECONDS.sleep(1);
             System.out.println("\r\n");
+
+            trigger.updateAfterMisfire(null);
+        }
+    }
+
+    @Test
+    public void test03() throws InterruptedException {
+        CronTriggerImpl trigger = (CronTriggerImpl) TriggerBuilder.newTrigger()
+                .withIdentity("trigger-01", "group-01")
+                .withSchedule(CronScheduleBuilder.cronSchedule("0/5 * * * * ?"))
+                .build();
+
+        Date date = new Date();
+        System.out.println("-->"+date);
+        trigger.computeFirstFireTime(null);
+
+
+        for(int i=0;i<100;i++){
+            Date date1 = new Date();
+            System.out.println("date:"+date1);
+            //getFireTimeAfter 返回触发器下一次将要触发的时间，如果在给定（参数）的时间之后，触发器不会在被触发，那么返回null
+            System.out.println("getFireTimeAfter:"+trigger.getFireTimeAfter(date1));
+            System.out.println("getNextFireTime:"+trigger.getNextFireTime());
+            TimeUnit.SECONDS.sleep(1);
+            System.out.println("\r\n");
+
+            /**
+             * 触发一次，nextFireTime会被更新成下次触发时间
+             */
+            trigger.triggered(null);
+
         }
     }
 }
