@@ -134,4 +134,12 @@ public class QuartzManager {
         sched.deleteJob(JobKey.jobKey(jobName, Scheduler.DEFAULT_GROUP));//删除任务
     }
 
+
+    public static void listener(String jobName)
+            throws SchedulerException{
+        Scheduler sched = sf.getScheduler();
+
+        sched.getListenerManager().addJobListener();
+    }
+
 }

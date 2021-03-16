@@ -1,6 +1,8 @@
 package org.simon.test01;
 
 import org.junit.Test;
+import org.quartz.Calendar;
+import org.quartz.impl.calendar.AnnualCalendar;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -55,6 +57,12 @@ public class Demo01 {
         }  catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    @Test
+    public void test02() {
+        AnnualCalendar calendar = new AnnualCalendar();
+
     }
 
 }
