@@ -848,6 +848,8 @@ public abstract class JobStoreSupport implements JobStore, Constants {
     }
     
     /**
+     *
+     * 启动的时候 有一个恢复机制：将恢复任何失败或misfire的作业，并根据需要清理数据存储。
      * <p>
      * Will recover any failed or misfired jobs and clean up the data store as
      * appropriate.

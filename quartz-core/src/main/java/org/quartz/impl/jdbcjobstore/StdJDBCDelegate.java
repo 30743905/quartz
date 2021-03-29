@@ -228,6 +228,7 @@ public class StdJDBCDelegate implements DriverDelegate, StdJDBCConstants {
         PreparedStatement ps = null;
 
         try {
+            // UPDATE QRTZ_TRIGGERS SET TRIGGER_STATE = ? WHERE SCHED_NAME = 'MyScheduler' AND (TRIGGER_STATE = ? OR TRIGGER_STATE = ?)
             ps = conn
                     .prepareStatement(rtp(UPDATE_TRIGGER_STATES_FROM_OTHER_STATES));
             ps.setString(1, newState);

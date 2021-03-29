@@ -1,5 +1,7 @@
 package org.simon.test02;
 
+import com.alibaba.fastjson.JSON;
+
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
@@ -17,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 public class QuartzCronJob implements Job {
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
-        log.info("===========>任务执行");
+        log.info("===========>任务执行job:{}", JSON.toJSONString(context.getJobDetail().getJobDataMap(), true));
+        log.info("===========>任务执行trigger:{}", JSON.toJSONString(context.getTrigger().getJobDataMap(), true));
     }
 }
